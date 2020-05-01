@@ -1,13 +1,14 @@
+#! /usr/bin/python
 # shawzinLuaGenerator.py
 # by Matthew Sweeney
 # 9/3/2019
 #
-# Python app to take musicXML as input and generate lua scripts
+# Python app to take a midi file as input and generate lua scripts
 # for the Logitech G-suite macro API to play the given music
 # with the shawzin emote in the game Warframe
 #
-# The goal has now changed and this script has its own GUI for note entry
-# I do want to optionally accept mxml input instead since it is persistent
+# This app also has its own GUI for note entry
+# I do want to optionally accept mxl input since it is persistent
 #
 # DE added the Yo scale and changed Pentatonic to Pentatonic Dominant
 # I accomodated these updates in this app 11/17/2019
@@ -18,6 +19,8 @@ from time import time, sleep
 import tkinter as tk
 
 from music21 import pitch, scale
+
+from shawzinLuaGenAccessories import *
 
 
 pentatonic_minor = tuple(pitch.Pitch(p) for p in ("c4", "e-4", "f4", "g4", "b-4", "c5", "e-5", "f5", "g5", "b-5", "c6", "e-6"))
@@ -206,6 +209,7 @@ def write_note(f, note, current_scale, current_mouse):
                 key_to_press = (step_index % 3) + 1
                 f.write(f"    Sleep(1)\n    PressAndReleaseKey(\"{key_to_press}\")  --{str(step_pitch)}\n    Sleep(1)\n")
                 return (scale_index, new_mouse)
+    # if execution reaches here, the note requested is not playable on shawzin
 
 
 def generate_lua(piece: list):
@@ -259,7 +263,14 @@ function play1()\n""")
         for chord in piece:
             f.write(f"    Sleep({chord[0]}*n)\n")
             for note in chord[1]:  # For each pitch to be played between waiting
-                current_scale, current_mouse = write_note(f, note, current_scale, current_mouse)
+                try:
+                    # write the note and get back the new current scale and mouse button
+                    current_scale, current_mouse = write_note(f, note, current_scale, current_mouse)
+                except:
+                    # if there is a problem e.g. the note is not playable on shawzin
+                    pass
+                    # for now:
+                    # just ignore that note, don't write it
 
         # At the end of the piece tab back to Minor Pentatonic, reset mouse
         tab_difference = (0 - current_scale) % len(shawzin_scales)
@@ -273,6 +284,7 @@ def main():
     # set up the Tkinter GUI
     root = tk.Tk()
     app = GuiApp(root)
+    menuBar = GuiMenuBar(root)
     root.mainloop()
 
     # Print to the console the representation of the whole piece when finished
