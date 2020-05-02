@@ -1,4 +1,4 @@
-#! /usr/bin/python
+##! /usr/bin/python3
 # shawzinLuaGenerator.py
 # by Matthew Sweeney
 # 9/3/2019
@@ -14,8 +14,6 @@
 # I accomodated these updates in this app 11/17/2019
 
 
-# from itertools import cycle
-from time import time, sleep
 import tkinter as tk
 
 from music21 import pitch, scale
@@ -53,40 +51,10 @@ shawzin_scales = (pentatonic_minor, pentatonic_major, chromatic, hexatonic, majo
 piece_to_perform = [[0, []]]
 
 
-def add_pitch_factory(_pitch: pitch.Pitch):
-    """ `_pitch`: the pitch to add to the piece's latest chord
-        return a function to add the specified pitch to the piece's latest chord
-    """
-    def add_pitch():
-        try:
-            # append a pitch to the pitch-list in the last [wait, [pitches]] element of the piece
-            piece_to_perform[-1][1].append(_pitch)
-        except IndexError:
-            # if the piece_to_perform list is empty
-            print("Add a wait duration first")
-        else:
-            # print to the console the pitch that was just added
-            print(str(_pitch))
-
-    return add_pitch
-
-
-def add_wait_factory(inv_notelength: int):
-    """ `inv_notelength`: inverse of notelength to wait for (e.g. `8` for 1/8 note)
-        return a function that adds the specified rest time to the piece
-    """
-    def add_wait():
-        # Make a new entry with the specified rest length before its chord, which starts empty
-        piece_to_perform.append([1 / inv_notelength, []])
-        # print to the console the length of the rest that was just added
-        print(f"1/{inv_notelength} rest")
-
-    return add_wait
-
-
 class GuiApp(tk.Frame):
-    def __init__(self, master):
-        super().__init__(master)
+    def __init__(self, parent):
+        super().__init__(parent)
+        parent.frame = self
         self.width = 740
         self.height = 600
         self.quarter_length = tk.IntVar()  # duration of a quarter note in ms
@@ -139,32 +107,69 @@ class GuiApp(tk.Frame):
         self.backspace_button = BackspaceButton(self)  # deletes most recent chord + rest
         self.backspace_button.grid(row=3, column=5, columnspan=2, sticky="SW")
 
+        # Generate Button
+        self.generate_button = GeneratorButton(self)  # stores the piece to output file
+        self.generate_button.grid(row=4, column=5, columnspan=2, sticky="SW")
+
 
 class PitchAdderButton(tk.Button):
     """ a button that adds its assigned pitch to the piece's latest chord
     """
-    def __init__(self, master, _pitch: pitch.Pitch):
-        super().__init__(master)
+    def __init__(self, parent, _pitch: pitch.Pitch):
+        super().__init__(parent)
         self.pitch = _pitch
-        self.config(text=str(self.pitch), command=add_pitch_factory(self.pitch), padx=20, pady=10)
+        self.config(text=str(self.pitch),
+            command=self.add_pitch_factory(self.pitch), padx=20, pady=10)
+
+    @staticmethod
+    def add_pitch_factory(_pitch: pitch.Pitch):
+        """ `_pitch`: the pitch to add to the piece's latest chord
+            return a function to add the specified pitch to the piece's latest chord
+        """
+        def add_pitch():
+            try:
+                # append a pitch to the pitch-list in the last [wait, [pitches]] element of the piece
+                piece_to_perform[-1][1].append(_pitch)
+            except IndexError:
+                # if the piece_to_perform list is empty
+                print("Add a wait duration first")
+            else:
+                # print to the console the pitch that was just added
+                print(str(_pitch))
+
+        return add_pitch
 
 
 class WaitAdderButton(tk.Button):
     """ a button that adds its assigned wait/rest onto piece
     """
-    def __init__(self, master, _inv_duration: int):
-        super().__init__(master)
+    def __init__(self, parent, _inv_duration: int):
+        super().__init__(parent)
         self.inv_duration = _inv_duration
-        self.config(text=f"1/{_inv_duration}", command=add_wait_factory(self.inv_duration), padx=20, pady=10)
+        self.config(text=f"1/{_inv_duration}",
+            command=self.add_wait_factory(self.inv_duration), padx=20, pady=10)
+
+    @staticmethod
+    def add_wait_factory(inv_notelength: int):
+        """ `inv_notelength`: inverse of notelength to wait for (e.g. `8` for 1/8 note)
+            return a function that adds the specified rest time to the piece
+        """
+        def add_wait():
+            # Make a new entry with the specified rest length before its chord, which starts empty
+            piece_to_perform.append([1 / inv_notelength, []])
+            # print to the console the length of the rest that was just added
+            print(f"1/{inv_notelength} rest")
+
+        return add_wait
 
 
 class BackspaceButton(tk.Button):
-    """ a button that deletes the piece's latest [wait, [<pitches>]] element
+    """ A button that deletes the piece's latest [wait, [<pitches>]] element
         so you don't have to start all over if you make a small mistake using the GUI.
         never again
     """
-    def __init__(self, master):
-        super().__init__(master)
+    def __init__(self, parent):
+        super().__init__(parent)
         self.config(text="Backspace", command=self.backspace, padx=20, pady=10)
     
     def backspace(self):
@@ -176,6 +181,15 @@ class BackspaceButton(tk.Button):
             print(f"Deleted {deleted}")
 
 
+class GeneratorButton(tk.Button):
+    """ A button that generates a lua script based on the current piece of music
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.config(text="Generate Lua Macro", command=generate_lua)
+
+
+
 class QuarterLengthEntry(tk.Entry):
     def __init__(self, master):
         super().__init__(master)
@@ -185,7 +199,7 @@ class QuarterLengthEntry(tk.Entry):
 def write_note(f, note, current_scale, current_mouse):
     """ Add instructions for playing pitch `note` to lua script file `f`\n
         starting from shawzin_scales[`current_scale`] with mouse button `current_mouse` pressed\n
-        Returns new scale and new mouse fingering (scale, mouse)
+        returns new scale and new mouse fingering (scale, mouse)
     """
     # Find nearest fingering to play this pitch
     for i in range(len(shawzin_scales)):  # For each scale
@@ -212,7 +226,8 @@ def write_note(f, note, current_scale, current_mouse):
     # if execution reaches here, the note requested is not playable on shawzin
 
 
-def generate_lua(piece: list):
+def generate_lua(piece: list = piece_to_perform):
+    print("Generating Lue macro")
     filename = "luaGeneratorOutput.lua"  # file to write the lua script to
     quarterlen = 2700  # ms duration of 1/4 note, will come from GUI in future  # TODO
                         # currently is actually duration of 1 measure/whole note, not 1/4 note
@@ -278,6 +293,7 @@ function play1()\n""")
 
         # Close the lua function
         f.write("end")
+    print(f"Successfully saved macro to {filename}")
 
 
 def main():
@@ -286,13 +302,6 @@ def main():
     app = GuiApp(root)
     menuBar = GuiMenuBar(root)
     root.mainloop()
-
-    # Print to the console the representation of the whole piece when finished
-    print(piece_to_perform)
-
-    generate_lua(piece_to_perform)
-    print("\nLua Script Successfully Generated!\n")
-    # end the program / close the app when done
 
 if __name__ == '__main__':
     main()
